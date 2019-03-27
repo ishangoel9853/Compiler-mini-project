@@ -29,17 +29,15 @@ double wtime(void)
     if (gettimeofday(&etstart, &tzp) == -1)
         perror("Error: calling gettimeofday() not successful.\n");
 
-    now_time = ((double)etstart.tv_sec) +              /* in seconds */
-               ((double)etstart.tv_usec) / 1000000.0;  /* in microseconds */
+    now_time = ((double)etstart.tv_sec) + ((double)etstart.tv_usec) / 1000000.0;  // in microseconds
     return now_time;
 }
 
 
-float** file_read(char *filename,      /* input file name */
-                  int  *numObjs,       /* no. data objects (local) */
-                  int  *numCoords)     /* no. coordinates */
-{
+float** file_read(char *filename,int  *numObjs,int  *numCoords) {
+
     float **objects;
+
     int     i, j, len;
     ssize_t numBytesRead;
 
@@ -48,11 +46,10 @@ float** file_read(char *filename,      /* input file name */
         int   lineLen;
 
         if ((infile = fopen(filename, "r")) == NULL) {
-            fprintf(stderr, "Error: no such file (%s)\n", filename);
+            fprintf(stderr, "----------------ERROR: File not found !!!----------- (%s)\n", filename);
             return NULL;
         }
 
-        /* first find the nmber of objects */
         lineLen = MAX_CHAR_PER_LINE;
         line = (char*) malloc(lineLen);
         assert(line != NULL);
@@ -93,8 +90,7 @@ float** file_read(char *filename,      /* input file name */
         printf("File %s numObjs   = %d\n",filename,*numObjs);
         printf("File %s numCoords = %d\n",filename,*numCoords);
 
-        /* allocate space for objects[][] and read all objects */
-        len = (*numObjs) * (*numCoords);
+        len = (*numObjs) * (*numCoords);                                        // allocate space for objects[][] and read all objects
         objects    = (float**)malloc((*numObjs) * sizeof(float*));
         assert(objects != NULL);
         objects[0] = (float*) malloc(len * sizeof(float));
@@ -103,7 +99,7 @@ float** file_read(char *filename,      /* input file name */
             objects[i] = objects[i-1] + (*numCoords);
 
         i = 0;
-        /* read all objects */
+        //Reading
         while (fgets(line, lineLen, infile) != NULL) {
             if (strtok(line, " \t\n") == NULL) continue;
             for (j=0; j<(*numCoords); j++)
@@ -119,14 +115,10 @@ float** file_read(char *filename,      /* input file name */
 
 
 
-int file_write(char      *filename,     /* input file name */
-               int        numClusters,  /* no. clusters */
-               int        numObjs,      /* no. data objects */
-               int        numCoords,    /* no. coordinates (local) */
-               float    **clusters,     /* [numClusters][numCoords] centers */
-               int       *membership)   /* [numObjs] */
+int file_write(char   *filename, int  numClusters, int numObjs,  int numCoords,  float **clusters, int *membership)
 {
     FILE *fptr;
+
     int   i, j;
     char  outFileName[1024];
 
@@ -189,19 +181,12 @@ __inline static int find_nearest_cluster(int numClusters, int dimensions, float 
     return(j);
 }
 
+// return an array ofcluster centers of size [numClusters][dimensions]
 
-/* return an array of cluster centers of size [numClusters][dimensions]       */
-float** seq_kmeans(float **objects,      /* in: [numObjs][dimensions] */
-                   int     dimensions,    /* no. features */
-                   int     numObjs,      /* no. objects */
-                   int     numClusters,  /* no. clusters */
-                   float   threshold,    /* % objects change membership */
-                   int    *membership,   /* out: [numObjs] */
-                   int    *loop_iterations)
+float** seq_kmeans(float **objects, int  dimensions, int numObjs, int numClusters, float threshold, int *membership, int *loop_iterations)
 {
     int      i, j, index, loop=0;
-    int     *newClusterSize; /* [numClusters]: no. objects assigned in each
-                                new cluster */
+    int     *newClusterSize; /* [numClusters]: no. objects assigned in each new cluster */
     float    delta;          /* % of objects change their clusters */
     float  **clusters;       /* out: [numClusters][dimensions] */
     float  **newClusters;    /* [numClusters][dimensions] */
@@ -244,7 +229,6 @@ float** seq_kmeans(float **objects,      /* in: [numObjs][dimensions] */
             /* if membership changes, increase delta by 1 */
             if (membership[i] != index) delta += 1.0;
 
-            /* assign the membership to object i */
             membership[i] = index;
 
             /* update new cluster centers : sum of objects located within */
