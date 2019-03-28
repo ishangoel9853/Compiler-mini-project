@@ -4,7 +4,7 @@
 /*delta :  % of objects change their clusters */
 /* **clusters: out: [numClusters][dimensions] */
 /* **newClusters: [numClusters][dimensions] */
-
+/* **objects: [numObjs][dimensions] */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -191,7 +191,7 @@ float** seq_kmeans(float **objects, int  dimensions, int numObjs, int numCluster
     float  **clusters;       /* out: [numClusters][dimensions] */
     float  **newClusters;    /* [numClusters][dimensions] */
 
-
+    //Allocating space for cluster centres.
     clusters    = (float**) malloc(numClusters * sizeof(float*));
     assert(clusters != NULL);
     clusters[0] = (float*)  malloc(numClusters * dimensions * sizeof(float));
@@ -200,17 +200,20 @@ float** seq_kmeans(float **objects, int  dimensions, int numObjs, int numCluster
         clusters[i] = clusters[i-1] + dimensions;
 
 
-    /* pick first numClusters elements of objects[] as initial cluster centers*/
+    // Initialization of cluster centres as the first k objects
     for (i=0,index=0; index<numClusters; i+= numObjs/numClusters-1,index++)
         for (j=0; j<dimensions; j++)
             clusters[index][j] = objects[i][j];
-    /* initialize membership[] */
+
+    //Initialization of the membership
     for (i=0; i<numObjs; i++) membership[i] = -1;
 
 
-    /* need to initialize newClusterSize and newClusters[0] to all 0 */
+    //newClusterSize: to keep track of size of each cluster
     newClusterSize = (int*) calloc(numClusters, sizeof(int));
     assert(newClusterSize != NULL);
+
+    //newClusters: A temporary 2d array to use while updating every step
     newClusters    = (float**) malloc(numClusters * sizeof(float*));
     assert(newClusters != NULL);
     newClusters[0] = (float*)  calloc(numClusters * dimensions, sizeof(float));
@@ -222,33 +225,31 @@ float** seq_kmeans(float **objects, int  dimensions, int numObjs, int numCluster
     do {
         delta = 0.0;
         for (i=0; i<numObjs; i++) {
-            /* find the array index of nestest cluster center */
+
             index = find_nearest_cluster(numClusters, dimensions, objects[i],
                                          clusters);
 
-            /* if membership changes, increase delta by 1 */
-            if (membership[i] != index) delta += 1.0;
+            if (membership[i] != index) delta += 1.0;                           //increase delta by 1 for every membership change.
 
             membership[i] = index;
 
-            /* update new cluster centers : sum of objects located within */
             newClusterSize[index]++;
             for (j=0; j<dimensions; j++)
                 newClusters[index][j] += objects[i][j];
         }
 
-        /* average the sum and replace old cluster centers with newClusters */
+        // average the sum and replace old cluster centers with newClusters
         for (i=0; i<numClusters; i++) {
             for (j=0; j<dimensions; j++) {
                 if (newClusterSize[i] > 0)
                     clusters[i][j] = newClusters[i][j] / newClusterSize[i];
-                newClusters[i][j] = 0.0;   /* set back to 0 */
+                newClusters[i][j] = 0.0;
             }
-            newClusterSize[i] = 0;   /* set back to 0 */
+            newClusterSize[i] = 0;
         }
 
         delta /= numObjs;
-    } while (delta > threshold && loop++ < 500);
+    } while (delta > threshold && loop++ < 500);                                //threshold conditions
 
     *loop_iterations = loop + 1;
 
@@ -262,20 +263,20 @@ float** seq_kmeans(float **objects, int  dimensions, int numObjs, int numCluster
 
 int main(int argc, char **argv) {
 
-    int     i, j;
-    int     numClusters, dimensions, numObjs;
-    int    *membership;    /* [numObjs] */
-    char   filename[100];
-    float **objects;       /* [numObjs][dimensions] data objects */
-    float **clusters;      /* [numClusters][dimensions] cluster center */
-    float   threshold;
-    double  timing, clustering_timing;
-    int     loop_iterations;
+    int i, j;
+    int numClusters, dimensions, numObjs;
+    int *membership;
+    char filename[100];
+    float **objects;
+    float **clusters;
+    float threshold;
+    double timing, clustering_timing;
+    int loop_iterations;
 
-    threshold        = 0.001;
-    numClusters      = 0;
+    threshold = 0.001;
+    numClusters = 0;
 
-    printf("Usage-> Arguments: filename  num_clusters\n");
+    printf(" Arguments: filename  num_clusters\n");
 
     char ch; char a;
     if(argc == 3){
