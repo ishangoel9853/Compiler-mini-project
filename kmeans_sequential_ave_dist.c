@@ -265,15 +265,18 @@ double ave_dist(float **objects,      /* in: [numObjs][dimensions] */
 
 int main(int argc, char **argv) {
 
-    int     i, j;
-    int     numClusters,maxClusters, dimensions, numObjs;
-    int    *membership;    /* [numObjs] */
-    char   filename[100];
+    int i , j , flag=1 ;
+    int numClusters,maxClusters, dimensions, numObjs;
+    int *membership;    /* [numObjs] */
+    char filename[100];
     float **objects;       /* [numObjs][dimensions] data objects */
     float **clusters;      /* [numClusters][dimensions] cluster center */
-    float   threshold;
+    float threshold;
     double  timing, clustering_timing,total_timing;
-    int     loop_iterations;
+    int  loop_iterations;
+    float thresh;
+    float temp1;
+    int change;
 
     threshold        = 0.001;
     numClusters      = 0;
@@ -289,6 +292,10 @@ int main(int argc, char **argv) {
         printf("Usage-> Arguments: filename  num_clusters\n");
         exit(-1);
     }
+
+    printf("Enter the threshold (must be between 0 and 1): ");
+    scanf("%f", &thresh);
+    printf("Given Value: %f \n",thresh);
 
     objects = file_read(filename, &numObjs, &dimensions);
     if (objects == NULL) exit(1);
@@ -313,32 +320,59 @@ int main(int argc, char **argv) {
 
     membership = (int*) malloc(numObjs * sizeof(int));
 
-    for(int i=2;i<=maxClusters;i++){
-        numClusters=i;
-  //********** This section is for measuring the computation time and # of iteration for each k*******
+    i = maxClusters / 2 ;
+    change = maxClusters / 2 ;
 
-        timing            = wtime();
-        clustering_timing = timing;
+    clusters = seq_kmeans(objects, dimensions, numObjs, maxClusters, threshold, membership, &loop_iterations);
+    temp1=ave_dist(objects,dimensions, numObjs, maxClusters, membership, clusters);
+    fprintf(fptr, "%d ", maxClusters);
+    fprintf(fptr, "%10.8f ", temp1);
+    temp1 = (1+thresh)*temp1;
+    fprintf(fptr, " Required :%10.8f ", temp1);
+    fprintf(fptr, "\n");
 
+    while(flag){
+            numClusters=i;
+      //********** This section is for measuring the average distance, computation time and # of iteration for each k*******
 
-        assert(membership != NULL);
-
-        clusters = seq_kmeans(objects, dimensions, numObjs, numClusters, threshold, membership, &loop_iterations);
-
-        timing            = wtime();
-        clustering_timing = timing - clustering_timing;
-
-        average_distance=ave_dist(objects,dimensions, numObjs, numClusters, membership, clusters);
-
-        // fprintf(fptr, "%d ", numClusters);
-        // fprintf(fptr, "%10.8f ", average_distance);
-        // fprintf(fptr, "\n");
+            timing            = wtime();
+            clustering_timing = timing;
 
 
-         fprintf(fptr,"%d ", numClusters);
-         fprintf(fptr,"%10.8f ", clustering_timing);
-         fprintf(fptr, "\n");
+            assert(membership != NULL);
 
+            clusters = seq_kmeans(objects, dimensions, numObjs, numClusters, threshold, membership, &loop_iterations);
+
+            timing            = wtime();
+            clustering_timing = timing - clustering_timing;
+
+            average_distance=ave_dist(objects,dimensions, numObjs, numClusters, membership, clusters);
+
+            fprintf(fptr, "%d ", numClusters);
+            fprintf(fptr, "%10.8f ", average_distance);
+            fprintf(fptr, "\n");
+
+             // fprintf(fptr,"%d ", numClusters);
+             // fprintf(fptr,"%10.8f ", clustering_timing);
+             // fprintf(fptr, "\n");
+             if(change == 1){
+                 flag =0;
+                 printf("Optimal K : %d \n",i);
+             }
+             else {
+                 if(average_distance == temp1){
+                     flag =0;
+                     printf("Optimal K : %d \n",i);
+                 }
+                 else if(average_distance >temp1){
+                     i = i + (change/2) ;
+                     change /=2 ;
+                 }
+                 else if(average_distance < temp1){
+                     i = i - (change/2) ;
+                     change /= 2 ;
+                 }
+             }
     }
     timing            = wtime();
     total_timing = timing - total_timing;
@@ -354,4 +388,3 @@ int main(int argc, char **argv) {
 
     return(0);
 }
-
