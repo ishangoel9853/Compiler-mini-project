@@ -1,9 +1,11 @@
-//***********************************SEQUENTIAL K-MEANS CLUSTERING**************************************
+
+//***********************************SEQUENTIAL K-MEANS CLUSTERING (USING OMP)**************************************
 
 /* [numClusters]: no. objects assigned in each new cluster */
 /*delta :  % of objects change their clusters */
 /* **clusters: out: [numClusters][dimensions] */
 /* **newClusters: [numClusters][dimensions] */
+
 
 
 #include <stdio.h>
@@ -16,6 +18,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <math.h>
 
 #define MAX_CHAR_PER_LINE 128
 
@@ -118,45 +121,6 @@ float** file_read(char *filename,      /* input file name */
 }
 
 
-
-int file_write(char      *filename,     /* input file name */
-               int        numClusters,  /* no. clusters */
-               int        numObjs,      /* no. data objects */
-               int        numCoords,    /* no. coordinates (local) */
-               float    **clusters,     /* [numClusters][numCoords] centers */
-               int       *membership)   /* [numObjs] */
-{
-    FILE *fptr;
-    int   i, j;
-    char  outFileName[1024];
-
-    sprintf(outFileName, "%s.output_cluster_centers", filename);
-    printf("Writing coordinates of K=%d cluster centers to file \"%s\"\n",numClusters, outFileName);
-
-    fptr = fopen(outFileName, "w");
-
-    for (i=0; i<numClusters; i++) {
-        fprintf(fptr, "%d ", i);
-        for (j=0; j<numCoords; j++)
-            fprintf(fptr, "%f ", clusters[i][j]);
-        fprintf(fptr, "\n");
-    }
-    fclose(fptr);
-
-
-    sprintf(outFileName, "%s.output_membership", filename);
-    printf("Writing membership of N=%d data objects to file \"%s\"\n",numObjs, outFileName);
-
-    fptr = fopen(outFileName, "w");
-    for (i=0; i<numObjs; i++)
-        fprintf(fptr, "%d %d\n", i, membership[i]);
-    fclose(fptr);
-
-    return 1;
-}
-
-
-
 __inline static float euclid_dist_2(int dimensions, float *x1, float *x2)
 {
     int i;
@@ -216,9 +180,10 @@ float** seq_kmeans(float **objects,      /* in: [numObjs][dimensions] */
 
 
     /* pick first numClusters elements of objects[] as initial cluster centers*/
-    for (i=0,index=0; index<numClusters; i+= numObjs/numClusters-1,index++)
+    for (i=0; i<numClusters; i++)
         for (j=0; j<dimensions; j++)
-            clusters[index][j] = objects[i][j];
+            clusters[i][j] = objects[i][j];
+
     /* initialize membership[] */
     for (i=0; i<numObjs; i++) membership[i] = -1;
 
@@ -275,65 +240,116 @@ float** seq_kmeans(float **objects,      /* in: [numObjs][dimensions] */
     return clusters;
 }
 
+double ave_dist(float **objects,      /* in: [numObjs][dimensions] */
+                   int     dimensions,    /* no. features */
+                   int     numObjs,      /* no. objects */
+                   int     numClusters,
+                   int    *membership,
+                   float **clusters )
+{
+
+      double dist=0,temp=0;
+      for(int i=0; i<numObjs; i++){
+        temp=euclid_dist_2(dimensions,objects[i],clusters[membership[i]]);
+        temp=sqrt(temp);
+        dist+=temp;
+      }
+      double average_distance;
+      average_distance=dist/numObjs;
+      //printf("average distance: %10.8f ",average_distance);
+      return average_distance;
+
+}
+
 
 int main(int argc, char **argv) {
 
     int     i, j;
-    int     numClusters, dimensions, numObjs;
+    int     numClusters,maxClusters, dimensions, numObjs;
     int    *membership;    /* [numObjs] */
     char   filename[100];
     float **objects;       /* [numObjs][dimensions] data objects */
     float **clusters;      /* [numClusters][dimensions] cluster center */
     float   threshold;
-    double  timing, clustering_timing;
+    double  timing, clustering_timing,total_timing;
     int     loop_iterations;
 
     threshold        = 0.001;
     numClusters      = 0;
 
-    printf("Usage-> Arguments: filename  num_clusters\n");
-
     char ch; char a;
     if(argc == 3){
        sscanf(argv[1],"%s",filename);
-       sscanf(argv[2],"%d",&numClusters);
+       sscanf(argv[2],"%d",&maxClusters);
     }
 
-    if (strlen(filename) == 0 || numClusters <= 1) {     printf("Invalid Arguments\n"); exit(-1); }
+    if (strlen(filename) == 0 || maxClusters <= 1) {
+        printf("Invalid Arguments\n");
+        printf("Usage-> Arguments: filename  num_clusters\n");
+        exit(-1);
+    }
 
     objects = file_read(filename, &numObjs, &dimensions);
     if (objects == NULL) exit(1);
 
+    printf("\nPerforming **** Regular Kmeans (sequential version) ****\n");
+    printf("Input file:     %s\n", filename);
+    printf("numObjs       = %d\n", numObjs);
+    printf("maxClusters   = %d\n", maxClusters);
+
+    printf("dimensions     = %d\n", dimensions);
+    printf("threshold     = %.4f\n", threshold);
+
+    FILE *fptr;
+    char  outFileName[1024];
+    sprintf(outFileName, "%s.ave_dist_trend", filename);
+    fptr = fopen(outFileName, "w");
+
+    double average_distance;
+
     timing            = wtime();
-    clustering_timing = timing;
+    total_timing = timing;
 
     membership = (int*) malloc(numObjs * sizeof(int));
 
-    assert(membership != NULL);
+    for(int i=1;i<=maxClusters;i=i+3){
+        numClusters=i;
+  //********** This section is for measuring the computation time and # of iteration for each k*******
 
-    clusters = seq_kmeans(objects, dimensions, numObjs, numClusters, threshold, membership, &loop_iterations);
+        timing            = wtime();
+        clustering_timing = timing;
 
+
+        assert(membership != NULL);
+
+        clusters = seq_kmeans(objects, dimensions, numObjs, numClusters, threshold, membership, &loop_iterations);
+
+        timing            = wtime();
+        clustering_timing = timing - clustering_timing;
+
+        average_distance=ave_dist(objects,dimensions, numObjs, numClusters, membership, clusters);
+
+        // fprintf(fptr, "%d ", numClusters);
+        // fprintf(fptr, "%10.8f ", average_distance);
+        // fprintf(fptr, "\n");
+
+
+         fprintf(fptr,"%d ", numClusters);
+         fprintf(fptr,"%10.8f ", clustering_timing);
+         fprintf(fptr, "\n");
+
+    }
+    timing            = wtime();
+    total_timing = timing - total_timing;
+
+    fclose(fptr);
     free(objects[0]);
     free(objects);
-
-    timing            = wtime();
-    clustering_timing = timing - clustering_timing;
-
-
-    file_write(filename, numClusters, numObjs, dimensions, clusters, membership);
-
     free(membership);
     free(clusters[0]);
     free(clusters);
 
-    printf("\nPerforming **** Regular Kmeans (sequential version) ****\n");
-    printf("Input file:     %s\n", filename);
-    printf("numObjs       = %d\n", numObjs);
-    printf("dimensions     = %d\n", dimensions);
-    printf("numClusters   = %d\n", numClusters);
-    printf("threshold     = %.4f\n", threshold);
-    printf("Loop iterations    = %d\n", loop_iterations);
-    printf("Computation timing = %10.8f sec\n", clustering_timing);
+    printf("Total Computation timing = %10.8f sec\n", total_timing);
 
     return(0);
 }
